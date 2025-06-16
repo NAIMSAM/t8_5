@@ -1,0 +1,157 @@
+Guide complet : De l'application Streamlit simple à l'outil client packagé
+
+1. Prérequis techniques
+
+- Python 3.10+ et pip
+- Bibliothèques Python listées dans requirements.txt
+- Docker Engine ou Docker Desktop installé
+- Windows PowerShell (pour les scripts .bat)
+
+2. Structure du projet
+
+Créer le dossier "t85_app" avec :
+```
+t85_app/
+├── app.py                  # Code Streamlit avec vérification de licence
+├── requirements.txt        # Dépendances Python
+├── LICENSE.txt             # Licence propriétaire
+├── public_key.pem          # Clé publique RSA
+├── private_key.pem         # Clé privée (DEV seulement)
+├── pipeline_t85_SVR_20250422_1445.joblib  # Modèle ML
+├── Dockerfile              # Instructions Docker
+├── start_app.bat           # Double‑clic démarrage
+├── stop_app.bat            # Double‑clic arrêt
+├── license_generator.py    # Génération clés et licence
+└── README.md               # Guide utilisateur
+```
+
+3. Installation des dépendances Python
+
+Dans "t85_app/requirements.txt" :
+```
+streamlit
+numpy
+pandas
+scikit-learn
+matplotlib
+joblib
+cryptography
+```
+Puis :
+```
+pip install -r requirements.txt
+```
+
+4. Génération des clés et du fichier de licence
+
+- Générer la paire RSA :
+```
+python license_generator.py gen-keys \
+  --private t85_app/private_key.pem \
+  --public  t85_app/public_key.pem
+```
+- Créer la licence pour le client :
+```
+python license_generator.py gen-license \
+  --private t85_app/private_key.pem \
+  --client "NomDuClient" \
+  --expiry 2025-12-31 \
+  --max-users 5 \
+  --output t85_app/license.lic
+```
+
+5. Intégration de la vérification dans app.py
+
+Ajouter tout en haut de app.py, avant `import streamlit` :
+```python
+try:
+    license_info = verify_license("license.lic", "public_key.pem")
+except RuntimeError as e:
+    print(f"Erreur licence: {e}")
+    import sys; sys.exit(1)
+```
+
+6. Rédaction du Dockerfile
+
+Fichier "t85_app/Dockerfile" :
+```dockerfile
+FROM python:3.10-slim
+WORKDIR /app
+COPY requirements.txt LICENSE.txt license.lic public_key.pem pipeline_t85_SVR_20250422_1445.joblib app.py ./
+RUN pip install --no-cache-dir -r requirements.txt
+EXPOSE 8501
+ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+```
+
+7. Construction et test de l'image Docker
+
+Dans "t85_app/" :
+```
+docker build -t t85-predictor:1.0 .
+```
+Tester :
+```
+docker run --rm -p 8501:8501 \
+  -v %CD%\LICENSE.txt:/app/LICENSE.txt:ro \
+  -v %CD%\license.lic:/app/license.lic:ro \
+  -v %CD%\public_key.pem:/app/public_key.pem:ro \
+  -v %CD%\pipeline_t85_SVR_20250422_1445.joblib:/app/pipeline_t85_SVR_20250422_1445.joblib:ro \
+  t85-predictor:1.0
+```
+
+8. Export de l'image
+
+```
+docker save t85-predictor:1.0 -o t85-predictor_1.0.tar
+```
+
+9. Préparation du package client
+
+Créer "t85_release/" et y copier :
+```
+t85_release/
+├── t85-predictor_1.0.tar
+├── LICENSE.txt
+├── license.lic
+├── public_key.pem
+├── start_app.bat
+├── stop_app.bat
+└── README.md
+```
+
+10. Scripts de démarrage/arrêt (.bat)
+
+start_app.bat :
+```bat
+@echo off
+docker load -i t85-predictor_1.0.tar
+docker run -d --name t85predictor -p 8501:8501 ^
+  -v "%~dp0LICENSE.txt":/app/LICENSE.txt:ro ^
+  -v "%~dp0license.lic":/app/license.lic:ro ^
+  -v "%~dp0public_key.pem":/app/public_key.pem:ro ^
+  -v "%~dp0pipeline_t85_SVR_20250422_1445.joblib":/app/pipeline_t85_SVR_20250422_1445.joblib:ro ^
+  t85-predictor:1.0
+timeout /t 3
+del /q "" 2>nul
+start http://localhost:8501
+```
+
+stop_app.bat :
+```bat
+@echo off
+docker stop t85predictor
+docker rm t85predictor
+```
+
+11. Livraison au client
+
+Remettez-lui le dossier "t85_release/" compressé. Le client :
+1. Installe Docker Desktop
+2. Double-clique sur start_app.bat
+3. Utilise l'app dans le navigateur
+4. Double-clique sur stop_app.bat pour arrêter
+
+---
+
+*Fin du guide détaillé pour débutant.*
+
