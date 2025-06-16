@@ -11,9 +11,9 @@ WORKDIR /app
 
 # 4. Copier les fichiers de l’app et de licence
 COPY requirements.txt            .
-COPY LICENSE.txt                 .
-COPY license.lic                 .
-COPY public_key.pem              .
+#COPY LICENSE.txt                 .
+#COPY license.lic                 .
+#COPY public_key.pem              .
 COPY app.py                      .
 # **Ajout de la pipeline ML**
 COPY pipeline_t85_SVR_20250422_1445.joblib  .
